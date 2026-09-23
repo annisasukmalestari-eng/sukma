@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Page Title</title>
+</head>
+<body>
+
+<h1>This is a Heading</h1>
+<p>This is a paragraph.</p>
+
+</body>
+</html>
+
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Block Blast Puzzle Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            width: 380px;
+        }
+
+        header {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 15px;
+            background: #0f172a;
+            padding: 8px 20px;
+            border-radius: 8px;
+            border: 1px solid #475569;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            gap: 4px;
+            background: #334155;
+            padding: 8px;
+            border-radius: 8px;
+            width: 320px;
+            height: 320px;
+            margin-bottom: 20px;
+        }
+
+        .cell {
+            background: #1e293b;
+            border-radius: 4px;
+            transition: background 0.1s ease;
+        }
+
+        .cell.filled {
+            border: 1px solid rgba(255,255,255,0.2);
+            box-shadow: inset 0 2px 4px rgba(255,255,255,0.3);
+        }
+
+        .cell.highlight {
+            background: rgba(56, 189, 248, 0.5) !important;
+        }
+
+        .spawns {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            height: 110px;
+            background: #0f172a;
+            border-radius: 8px;
+            padding: 10px;
+            border: 1px solid #475569;
+            gap: 10px;
+        }
+
+        .spawn-slot {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .mini-grid {
+            display: grid;
+            gap: 2px;
+            transform: scale(0.7);
+            transform-origin: center;
+        }
+
+        .mini-cell {
+            width: 22px;
+            height: 22px;
+            border-radius: 3px;
+        }
+
+        .mini-cell.filled {
+            box-shadow: inset 0 2px 4px rgba(255,255,255,0.3);
+        }
+
+        .spawn-slot.selected .mini-grid {
+            transform: scale(0.85);
+            filter: drop-shadow(0 0 8px #38bdf8);
+        }
+
+        /* Game Over Modal */
+        #game-over {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.9);
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+
+        #game-over h2 {
+            font-size: 2.5rem;
+            color: #f43f5e;
+            margin-bottom: 10px;
+        }
+
+        .btn {
+            background: #38bdf8;
+            color: #0f172a;
+            border: none;
+            padding: 10px 24px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+
+        .btn:hover {
+            background: #0ea5e9;
+        }
+
+        .instructions {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            margin-top: 15px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <header>Skor: <span id="score">0</span></header>
+
+        <div class="grid" id="main-grid"></div>
+
+        <div class="spawns" id="spawn-container"></div>
+
+        <div class="instructions">Klik balok di bawah, lalu klik petak papan untuk meletakkannya!</div>
+    </div>
+
+    <div id="game-over">
+        <h2>GAME OVER</h2>
+        <p>Skor Akhir: <span id="final-score">0</span></p>
+        <button class="btn" onclick="restartGame()">Main Lagi</button>
+    </div>
+
+<script>
+    // Web Audio API untuk efek suara "Cring" dan Penempatan
+    let audioCtx = null;
+
+    function playCringSound() {
+        try {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            const now = audioCtx.currentTime;
+            // Nada tinggi mirip "Cring" berdenting
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(1046.50, now); // Nada C6
+            osc.frequency.setValueAtTime(1318.51, now + 0.1); // Nada E6
+            osc.frequency.setValueAtTime(1567.98, now + 0.2); // Nada G6
+
+            gain.gain.setValueAtTime(0.3, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+
+            osc.start(now);
+            osc.stop(now + 0.6);
+        } catch (e) {
+            console.log("Audio error", e);
+        }
+    }
+
+    function playPlaceSound() {
+        try {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            const now = audioCtx.currentTime;
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(300, now);
+            osc.frequency.exponentialRampToValueAtTime(150, now + 0.1);
+
+            gain.gain.setValueAtTime(0.2, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+
+            osc.start(now);
+            osc.stop(now + 0.1);
+        } catch (e) {
+            console.log("Audio error", e);
+        }
+    }
+
+    const GRID_SIZE = 8;
+    let board = Array(GRID_SIZE).fill(0).map(() => Array(GRID_SIZE).fill(null));
+    let score = 0;
+    let selectedBlockIndex = null;
+    let currentSpawns = [null, null, null];
+
+    const COLORS = ['#f43f5e', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
+    
+    // Variasi bentuk blok lengkap
+    const SHAPES = [
+        [[1]],                         // 1x1
+        [[1, 1]],                      // Garis 2 horizontal
+        [[1], [1]],                    // Garis 2 vertikal
+        [[1, 1, 1]],                   // Garis 3 horizontal
+        [[1], [1], [1]],               // Garis 3 vertikal
+        [[1, 1], [1, 1]],              // Kotak 2x2
+        [[1, 1], [1, 0]],              // Sudut L kecil
+        [[1, 1, 1], [0, 0, 1]],        // Sudut L besar
+        [[1, 1, 1], [0, 1, 0]]         // Huruf T
+    ];
+
+    const mainGridEl = document.getElementById('main-grid');
+    const spawnContainerEl = document.getElementById('spawn-container');
+    const scoreEl = document.getElementById('score');
+    const gameOverEl = document.getElementById('game-over');
+    const finalScoreEl = document.getElementById('final-score');
+
+    function initBoard() {
+        mainGridEl.innerHTML = '';
+        for (let r = 0; r < GRID_SIZE; r++) {
+            for (let c = 0; c < GRID_SIZE; c++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                cell.dataset.row = r;
+                cell.dataset.col = c;
+                
+                cell.addEventListener('mouseenter', () => handleHover(r, c));
+                cell.addEventListener('click', () => handleClick(r, c));
+
+                mainGridEl.appendChild(cell);
+            }
+        }
+    }
+
+    function generateSpawns() {
+        for (let i = 0; i < 3; i++) {
+            const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+            const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+            currentSpawns[i] = { matrix: shape, color: color };
+        }
+        renderSpawns();
+        checkGameOver();
+    }
+
+    function renderSpawns() {
+        spawnContainerEl.innerHTML = '';
+        currentSpawns.forEach((block, index) => {
+            const slot = document.createElement('div');
+            slot.classList.add('spawn-slot');
+            if (selectedBlockIndex === index) {
+                slot.classList.add('selected');
+            }
+
+            if (block) {
+                const rows = block.matrix.length;
+                const cols = block.matrix[0].length;
+                const miniGrid = document.createElement('div');
+                miniGrid.classList.add('mini-grid');
+                miniGrid.style.gridTemplateColumns = `repeat(${cols}, 22px)`;
+                miniGrid.style.gridTemplateRows = `repeat(${rows}, 22px)`;
+
+                for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        const miniCell = document.createElement('div');
+                        miniCell.classList.add('mini-cell');
+                        if (block.matrix[r][c] === 1) {
+                            miniCell.classList.add('filled');
+                            miniCell.style.backgroundColor = block.color;
+                        }
+                        miniGrid.appendChild(miniCell);
+                    }
+                }
+                slot.appendChild(miniGrid);
+                slot.addEventListener('click', () => {
+                    selectedBlockIndex = (selectedBlockIndex === index) ? null : index;
+                    renderSpawns();
+                });
+            }
+            spawnContainerEl.appendChild(slot);
+        });
+    }
+
+    function updateBoardUI() {
+        const cells = mainGridEl.children;
+        for (let r = 0; r < GRID_SIZE; r++) {
+            for (let c = 0; c < GRID_SIZE; c++) {
+                const index = r * GRID_SIZE + c;
+                const cell = cells[index];
+                if (board[r][c]) {
+                    cell.classList.add('filled');
+                    cell.style.backgroundColor = board[r][c];
+                } else {
+                    cell.classList.remove('filled');
+                    cell.style.backgroundColor = '';
+                }
+            }
+        }
+    }
+
+    function handleHover(r, c) {
+        for (let cell of mainGridEl.children) cell.classList.remove('highlight');
+
+        if (selectedBlockIndex === null || !currentSpawns[selectedBlockIndex]) return;
+        const block = currentSpawns[selectedBlockIndex];
+
+        if (canPlace(block.matrix, r, c)) {
+            const cells = mainGridEl.children;
+            for (let dr = 0; dr < block.matrix.length; dr++) {
+                for (let dc = 0; dc < block.matrix[0].length; dc++) {
+                    if (block.matrix[dr][dc] === 1) {
+                        const targetIndex = (r + dr) * GRID_SIZE + (c + dc);
+                        if (cells[targetIndex]) cells[targetIndex].classList.add('highlight');
+                    }
+                }
+            }
+        }
+    }
+
+    function canPlace(matrix, startR, startC) {
+        const rows = matrix.length;
+        const cols = matrix[0].length;
+        if (startR + rows > GRID_SIZE || startC + cols > GRID_SIZE) return false;
+
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                if (matrix[r][c] === 1 && board[startR + r][startC + c] !== null) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    function handleClick(r, c) {
+        if (selectedBlockIndex === null || !currentSpawns[selectedBlockIndex]) return;
+        const block = currentSpawns[selectedBlockIndex];
+
+        if (canPlace(block.matrix, r, c)) {
+            let blockCount = 0;
+            for (let dr = 0; dr < block.matrix.length; dr++) {
+                for (let dc = 0; dc < block.matrix[0].length; dc++) {
+                    if (block.matrix[dr][dc] === 1) {
+                        board[r + dr][c + dc] = block.color;
+                        blockCount++;
+                    }
+                }
+            }
+
+            playPlaceSound();
+            // Skor bertambah berdasarkan jumlah kotak kecil pada blok yang diletakkan
+            score += blockCount * 10;
+            scoreEl.innerText = score;
+
+            currentSpawns[selectedBlockIndex] = null;
+            selectedBlockIndex = null;
+
+            updateBoardUI();
+            checkLines();
+
+            if (currentSpawns.every(b => b === null)) {
+                generateSpawns();
+            } else {
+                renderSpawns();
+                checkGameOver();
+            }
+        }
+    }
+
+    function checkLines() {
+        let rowsToClear = [];
+        let colsToClear = [];
+
+        // Cek baris penuh
+        for (let r = 0; r < GRID_SIZE; r++) {
+            if (board[r].every(cell => cell !== null)) {
+                rowsToClear.push(r);
+            }
+        }
+
+        // Cek kolom penuh
+        for (let c = 0; c < GRID_SIZE; c++) {
+            let isFull = true;
+            for (let r = 0; r < GRID_SIZE; r++) {
+                if (board[r][c] === null) {
+                    isFull = false;
+                    break;
+                }
+            }
+            if (isFull) colsToClear.push(c);
+        }
+
+        if (rowsToClear.length > 0 || colsToClear.length > 0) {
+            playCringSound(); // Suara "Cring" saat baris/kolom penuh hancur!
+
+            rowsToClear.forEach(r => {
+                for (let c = 0; c < GRID_SIZE; c++) board[r][c] = null;
+                score += 100;
+            });
+
+            colsToClear.forEach(c => {
+                for (let r = 0; r < GRID_SIZE; r++) board[r][c] = null;
+                score += 100;
+            });
+
+            scoreEl.innerText = score;
+            updateBoardUI();
+        }
+    }
+
+    function checkGameOver() {
+        const available = currentSpawns.filter(b => b !== null);
+        if (available.length === 0) return;
+
+        let possible = false;
+        for (let block of available) {
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    if (canPlace(block.matrix, r, c)) {
+                        possible = true;
+                        break;
+                    }
+                }
+                if (possible) break;
+            }
+            if (possible) break;
+        }
+
+        if (!possible) {
+            finalScoreEl.innerText = score;
+            gameOverEl.style.display = 'flex';
+        }
+    }
+
+    function restartGame() {
+        board = Array(GRID_SIZE).fill(0).map(() => Array(GRID_SIZE).fill(null));
+        score = 0;
+        scoreEl.innerText = score;
+        selectedBlockIndex = null;
+        gameOverEl.style.display = 'none';
+        updateBoardUI();
+        generateSpawns();
+    }
+
+    // Mulai game saat halaman dimuat
+    initBoard();
+    generateSpawns();
+</script>
+
+</body>
+</html>
